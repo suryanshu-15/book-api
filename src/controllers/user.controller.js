@@ -3,6 +3,7 @@ import { User } from "../models/user.model.js"
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { Book } from "../models/books.model.js";
+import redisClient from "../client.js";
 
 const registerUser = asyncHandler( async(req,res) => {
     const {fullname, email, username, password, address}= req.body
@@ -68,8 +69,13 @@ const loginUser = asyncHandler( async(req,res) => {
 
     const logedInUser = await User.findById(user._id).select("-password -refreshToken")
 
+    const options = {
+        httpOnly: true,
+        secure: true,
+    }
 
     return res.status(200)
+    .cookie("userId", logedInUser._id, options)
     .json(
         new ApiResponse(
             200,
@@ -83,6 +89,10 @@ const loginUser = asyncHandler( async(req,res) => {
 
 const readBook = asyncHandler(async(req,res)=>{
     const books = await Book.find();
+
+    // Cache the result
+    const cacheKey = 'books';
+    await redisClient.set(cacheKey, JSON.stringify(books), { EX: 60 });
 
     return res.status(200).json(
       new ApiResponse(200, books, "Books retrieved successfully")
